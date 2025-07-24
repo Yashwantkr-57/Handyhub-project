@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HandyHub – Local Service Providers</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f8f8f8}
+        header { background: #1f93d4; color: #fff; padding: 16px 8px; text-align: center;}
+        main { max-width: 800px; margin: auto; padding: 24px 8px;}
+        .container { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #ccc; margin-bottom: 24px; padding: 16px;}
+        h2 { color: #236048;}
+        label { display: block; margin-top: 12px;}
+        input, textarea, select { width: 100%; padding: 8px; margin-top: 2px;}
+        button { background: #23b26b; color: #fff; border: none; padding: 10px 24px; border-radius: 4px; margin-top: 16px; cursor: pointer;}
+        button:hover { background: #1e965b;}
+        .service { padding: 12px 0; border-bottom: 1px solid #eee;}
+        .star { color: #f4c150;}
+        .admin-section { margin-top: 24px; }
+        .dashboard-table { width: 100%; border-collapse: collapse;}
+        .dashboard-table th, .dashboard-table td { padding: 8px; border: 1px solid #ddd;}
+        .dashboard-table th { background: #eef;}
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #222;
+            color: #fff;
+            padding: 12px 28px;
+            border-radius: 24px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s;
+            z-index: 999;
+        }
+        .toast.show { opacity: 1; pointer-events: auto;}
+        @media (max-width: 600px) {
+            main { padding: 8px }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>HandyHub</h1>
+    <p>Digital Platform for Local Service Providers</p>
+</header>
+<main>
+    <!-- Service Provider Registration -->
+    <div class="container" id="register-section">
+        <h2>Provider Registration</h2>
+        <form id="registerForm">
+            <label>Name <input type="text" id="providerName" required></label>
+            <label>Service <input type="text" id="providerService" required></label>
+            <label>Experience (years) <input type="number" id="providerExp" min="0" required></label>
+            <label>Rate (INR/hr) <input type="number" id="providerRate" min="1" required></label>
+            <button type="submit">Register</button>
+        </form>
+    </div>
+
+    <!-- Service Listing and Booking -->
+    <div class="container">
+        <h2>Available Providers</h2>
+        <div id="providerList"></div>
+    </div>
+
+    <!-- Booking Form (shown conditionally) -->
+    <div class="container" id="booking-section" style="display:none;">
+        <h2>Book Service</h2>
+        <form id="bookingForm">
+            <label>Your Name <input type="text" id="customerName" required></label>
+            <label>Date & Time <input type="datetime-local" id="bookingDate" required></label>
+            <input type="hidden" id="selectedProvider">
+            <button type="submit">Book Now</button>
+        </form>
+    </div>
+
+    <!-- Ratings and Feedback -->
+    <div class="container" id="feedback-section" style="display:none;">
+        <h2>Give Feedback</h2>
+        <form id="feedbackForm">
+            <label>Rating
+                <select id="ratingScore">
+                    <option value="1">1 ★</option>
+                    <option value="2">2 ★★</option>
+                    <option value="3">3 ★★★</option>
+                    <option value="4">4 ★★★★</option>
+                    <option value="5">5 ★★★★★</option>
+                </select>
+            </label>
+            <label>Feedback
+                <textarea id="feedbackText" rows="3"></textarea>
+            </label>
+            <input type="hidden" id="feedbackProvider">
+            <button type="submit">Submit</button>
+        </form>
+    </div>
+
+    <!-- Admin Dashboard (demo only) -->
+    <div class="container admin-section">
+        <h2>Admin Dashboard</h2>
+        <table class="dashboard-table" id="adminTable">
+            <thead>
+                <tr>
+                    <th>Provider</th>
+                    <th>Service</th>
+                    <th>Bookings</th>
+                    <th>Avg. Rating</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</main>
+<!-- Toast Notification -->
+<div id="toast" class="toast"></div>
+
+<script>
+// Data arrays
+const providers = [];
+const bookings = [];
+const feedbacks = [];
+
+// Request browser notification permission
+if (window.Notification && Notification.permission !== 'granted') {
+    Notification.requestPermission();
+}
+
+// Show toast notification
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = "toast show";
+    setTimeout(() => toast.className = "toast", 2200);
+}
+
+// Browser notification
+function notifyUser(message) {
+    if (window.Notification && Notification.permission === "granted") {
+        new Notification("HandyHub", { body: message });
+    }
+}
+
+// Update provider list
+function refreshProviderList() {
+    const list = document.getElementById('providerList');
+    list.innerHTML = '';
+    providers.forEach((p, i) => {
+        const scores = feedbacks.filter(f => f.providerId == i).map(f => f.rating);
+        let avgRating = 'No ratings';
+        if (scores.length) avgRating = (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) + ' ★';
+        list.innerHTML += `
+        <div class="service">
+            <b>${p.name}</b> (${p.service})<br>
+            Experience: ${p.exp} years | Rate: ₹${p.rate}/hr<br>
+            Average Rating: <span class="star">${avgRating}</span>
+            <br>
+            <button onclick="showBooking(${i})">Book</button>
+            <button onclick="showFeedback(${i})" style="margin-left:8px;">Rate</button>
+        </div>
+        `;
+    });
+    refreshAdminTable();
+}
+
+// Update admin table
+function refreshAdminTable() {
+    const tableBody = document.querySelector('#adminTable tbody');
+    tableBody.innerHTML = '';
+    providers.forEach((p, i) => {
+        const bCount = bookings.filter(b => b.providerId == i).length;
+        const scores = feedbacks.filter(f => f.providerId == i).map(f => f.rating);
+        let avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '-';
+        tableBody.innerHTML += `
+        <tr>
+            <td>${p.name}</td>
+            <td>${p.service}</td>
+            <td>${bCount}</td>
+            <td>${avg !== '-' ? avg + ' ★' : '-'}</td>
+        </tr>
+        `;
+    });
+}
+
+// Provider registration
+document.getElementById('registerForm').onsubmit = function(e) {
+    e.preventDefault();
+    providers.push({
+        name: providerName.value,
+        service: providerService.value,
+        exp: providerExp.value,
+        rate: providerRate.value
+    });
+    this.reset();
+    showToast("Provider registered!");
+    notifyUser("Provider registration successful.");
+    refreshProviderList();
+};
+
+// Booking form
+function showBooking(idx) {
+    document.getElementById('booking-section').style.display = '';
+    document.getElementById('bookingForm').reset();
+    document.getElementById('selectedProvider').value = idx;
+    window.scrollTo(0, document.getElementById('booking-section').offsetTop-20);
+}
+document.getElementById('bookingForm').onsubmit = function(e) {
+    e.preventDefault();
+    bookings.push({
+        providerId: selectedProvider.value,
+        customer: customerName.value,
+        date: bookingDate.value
+    });
+    showToast("Booking successful!");
+    notifyUser("Booking confirmed! Please check your dashboard.");
+    document.getElementById('booking-section').style.display = 'none';
+    refreshAdminTable();
+};
+
+// Feedback form
+function showFeedback(idx) {
+    document.getElementById('feedback-section').style.display = '';
+    document.getElementById('feedbackForm').reset();
+    document.getElementById('feedbackProvider').value = idx;
+    window.scrollTo(0, document.getElementById('feedback-section').offsetTop-20);
+}
+document.getElementById('feedbackForm').onsubmit = function(e) {
+    e.preventDefault();
+    feedbacks.push({
+        providerId: feedbackProvider.value,
+        rating: parseInt(ratingScore.value),
+        text: feedbackText.value
+    });
+    document.getElementById('feedback-section').style.display = 'none';
+    showToast("Feedback submitted!");
+    notifyUser("Thank you for your feedback!");
+    refreshProviderList();
+};
+
+// Initial display
+refreshProviderList();
+
+</script>
+</body>
+</html>
+
